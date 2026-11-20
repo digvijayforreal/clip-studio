@@ -16,8 +16,19 @@ STYLES = {
              "outline": "000000", "border": 8, "shadow": 3, "upper": True, "max_words": 3, "max_units": 13},
     "clean": {"label": "Clean", "font": "Poppins ExtraBold", "size": 100, "text": "FFFFFF", "active": "5CE1E6",
               "outline": "000000", "border": 6, "shadow": 2, "upper": False, "max_words": 4, "max_units": 17},
+    # one word at a time, big, each popping in
+    "pop": {"label": "Pop", "font": "Poppins ExtraBold", "size": 150, "text": "FFFFFF", "active": "FFFFFF",
+            "outline": "000000", "border": 9, "shadow": 4, "upper": True, "max_words": 1, "max_units": 10},
+    # the line on a dark box, the spoken word in green
+    "boxed": {"label": "Boxed", "font": "Poppins ExtraBold", "size": 96, "text": "FFFFFF", "active": "4DFF88",
+              "outline": "111111", "outline_alpha": "30", "border": 22, "shadow": 0, "box": True, "upper": False,
+              "max_words": 4, "max_units": 17},
 }
 DEFAULT_STYLE = "bold"
+
+HOOK = {"font": "Poppins ExtraBold", "size": 90, "text": "111111", "box": "FFFFFF", "pad": 26, "max_units": 17,
+        "max_lines": 3}
+BAR = {"height": 14, "color": "FFE600", "back": "000000"}
 
 HOLD = 0.35        # seconds a line stays up after its last word, when the next line isn't straight after
 GAP_BREAK = 0.5    # a pause at least this long starts a new line
@@ -110,6 +121,8 @@ def group_words(words: list[dict], max_words: int, max_units: int) -> list[list[
 
 def header(style_name: str = DEFAULT_STYLE) -> str:
     st = STYLES.get(style_name) or STYLES[DEFAULT_STYLE]
+    border_style = 3 if st.get("box") else 1       # 3: an opaque box in the outline colour behind the text
+    outline = style_color(st["outline"], st.get("outline_alpha", "00"))
     return (
         "[Script Info]\n"
         "ScriptType: v4.00+\n"
@@ -123,19 +136,90 @@ def header(style_name: str = DEFAULT_STYLE) -> str:
         "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
         "MarginR, MarginV, Encoding\n"
         f"Style: Cap,{st['font']},{st['size']},{style_color(st['text'])},{style_color(st['text'])},"
-        f"{style_color(st['outline'])},{style_color('000000', '64')},0,0,0,0,100,100,0,0,1,"
+        f"{outline},{style_color('000000', '64')},0,0,0,0,100,100,0,0,{border_style},"
         f"{st['border']},{st['shadow']},5,80,80,0,1\n"
+        f"Style: Text,Poppins ExtraBold,90,{style_color('FFFFFF')},{style_color('FFFFFF')},{style_color('000000')},"
+        f"{style_color('000000', '64')},0,0,0,0,100,100,0,0,1,6,2,5,40,40,0,1\n"
+        f"Style: TextBox,Poppins ExtraBold,90,{style_color('FFFFFF')},{style_color('FFFFFF')},{style_color('000000')},"
+        f"{style_color('000000', 'FF')},0,0,0,0,100,100,0,0,3,18,0,5,40,40,0,1\n"
+        f"Style: Hook,{HOOK['font']},{HOOK['size']},{style_color(HOOK['text'])},{style_color(HOOK['text'])},"
+        f"{style_color(HOOK['box'])},{style_color('000000', '80')},0,0,0,0,100,100,0,0,3,{HOOK['pad']},0,5,60,60,0,1\n"
+        f"Style: Bar,{HOOK['font']},20,{style_color(BAR['color'])},{style_color(BAR['color'])},"
+        f"{style_color(BAR['back'])},{style_color('000000', 'FF')},0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1\n"
         "\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
 
 
+def hook_lines(text: str) -> list[str]:
+    """The hook title split into a few short lines, by whole words."""
+    clean = _UNSAFE.sub("", text).strip()
+    lines: list[str] = []
+    for word in clean.split():
+        if lines and units(lines[-1]) + 1 + units(word) <= HOOK["max_units"]:
+            lines[-1] += " " + word
+        else:
+            lines.append(word)
+    if len(lines) > HOOK["max_lines"]:                  # too long: the rest goes on the last line, made smaller
+        lines = lines[:HOOK["max_lines"] - 1] + [" ".join(lines[HOOK["max_lines"] - 1:])]
+    return lines
+
+
+def hook_event(text: str, length: float, y: int, seconds: float | None = None) -> str:
+    """The title box near the top: pops in at the start, and stays up for `seconds` (or the whole clip)."""
+    lines = hook_lines(text)
+    if not lines:
+        return ""
+    end = length if not seconds else min(length, float(seconds))
+    widest = max(units(line) for line in lines)
+    size = HOOK["size"] if widest <= HOOK["max_units"] else max(MIN_SIZE, int(HOOK["size"] * HOOK["max_units"] / widest))
+    tags = f"\\an5\\pos({config.OUT_W // 2},{y})" + _POP + (f"\\fs{size}" if size != HOOK["size"] else "")
+    if end < length:
+        tags += "\\fad(0,200)"
+    return f"Dialogue: 3,{ass_time(0)},{ass_time(end)},Hook,,0,0,0,,{{{tags}}}" + "\\N".join(lines)
+
+
+def progress_event(length: float) -> str:
+    """A thin bar along the top that fills from left to right over the whole clip."""
+    ms = int(round(length * 1000))
+    shape = f"m 0 0 l {config.OUT_W} 0 l {config.OUT_W} {BAR['height']} l 0 {BAR['height']}"
+    return (f"Dialogue: 4,{ass_time(0)},{ass_time(length)},Bar,,0,0,0,,"
+            f"{{\\an7\\pos(0,0)\\bord0\\shad0\\fscx0\\t(0,{ms},\\fscx100)\\p1}}{shape}{{\\p0}}")
+
+
+TEXT_FONTS = ("Poppins ExtraBold", "Anton")
+
+
+def text_event(t: dict, length: float) -> str:
+    """A free text on the clip. t: text, start, end (clip seconds), px, py (centre in pixels), size, font, color,
+    box (a solid box behind it) and back (the box colour, or the outline colour without a box)."""
+    a, b = max(0.0, float(t["start"])), min(length, float(t["end"]))
+    if b - a < 0.02:
+        return ""
+    lines = [_UNSAFE.sub("", part).strip() for part in str(t.get("text", "")).splitlines()]
+    lines = [line for line in lines if line]
+    if not lines:
+        return ""
+    font = t.get("font") if t.get("font") in TEXT_FONTS else TEXT_FONTS[0]
+    style = "TextBox" if t.get("box") else "Text"
+    tags = (f"\\an5\\pos({int(round(t['px']))},{int(round(t['py']))})\\fn{font}\\fs{int(t.get('size', 90))}"
+            f"\\c{tag_color(t.get('color', 'FFFFFF'))}\\3c{tag_color(t.get('back', '000000'))}" + _POP)
+    return f"Dialogue: 2,{ass_time(a)},{ass_time(b)},{style},,0,0,0,,{{{tags}}}" + "\\N".join(lines)
+
+
 def build_ass(words: list[dict], start: float, end: float, style_name: str = DEFAULT_STYLE,
-              y: int | None = None) -> str:
-    """The ASS file for seconds [start, end] of the source. Times in the file count from `start`."""
+              y: int | None = None, hook: str = "", hook_y: int = 300, hook_seconds: float | None = None,
+              progress: bool = False, x: int | None = None, scale: float = 1.0, texts=None, under=None,
+              extra=None) -> str:
+    """The ASS file for seconds [start, end] of the source. Times in the file count from `start`.
+
+    Captions always (centred on x, y, sized by scale); a hook title near the top, free texts and a progress bar
+    when asked for. Texts are already in clip seconds and pixels."""
     st = STYLES.get(style_name) or STYLES[DEFAULT_STYLE]
     y = int(config.OUT_H * 0.70) if y is None else int(y)
+    x = config.OUT_W // 2 if x is None else int(x)
+    base = max(MIN_SIZE, int(round(st["size"] * float(scale or 1.0))))
     length = end - start
     shown = []
     for w in sorted((w for w in words if start - 0.05 <= w["s"] < end), key=lambda w: w["s"]):
@@ -149,7 +233,7 @@ def build_ass(words: list[dict], start: float, end: float, style_name: str = DEF
         next_start = groups[gi + 1][0]["s"] if gi + 1 < len(groups) else length
         line_end = min(group[-1]["e"] + HOLD, next_start, length)
         width = sum(units(w["t"]) for w in group)
-        size = max(MIN_SIZE, int(st["size"] * st["max_units"] / width)) if width > st["max_units"] else st["size"]
+        size = max(MIN_SIZE, int(base * st["max_units"] / width)) if width > st["max_units"] else base
         first = True
         for i, w in enumerate(group):
             a = group[0]["s"] if i == 0 else w["s"]
@@ -158,11 +242,18 @@ def build_ass(words: list[dict], start: float, end: float, style_name: str = DEF
                 continue                     # shorter than a hundredth of a second: never visible
             words_on_line = " ".join(
                 f"{{\\c{tag_color(st['active'] if j == i else st['text'])}}}{x['t']}" for j, x in enumerate(group))
-            tags = f"\\an5\\pos({config.OUT_W // 2},{y})"
+            tags = f"\\an5\\pos({x},{y})"
             if size != st["size"]:
                 tags += f"\\fs{size}"
             if first:
                 tags += _POP
                 first = False
             events.append(f"Dialogue: 0,{ass_time(a)},{ass_time(b)},Cap,,0,0,0,,{{{tags}}}{words_on_line}")
-    return header(style_name) + "".join(e + "\n" for e in events)
+    if hook and hook.strip():
+        events.append(hook_event(hook, length, hook_y, hook_seconds))
+    for t in texts or []:
+        events.append(text_event(t, length))
+    events = list(under or []) + events + list(extra or [])     # template graphics first: they go under everything
+    if progress and length > 0:
+        events.append(progress_event(length))
+    return header(style_name) + "".join(e + "\n" for e in events if e)

@@ -8,6 +8,7 @@ APP_DIR = Path(__file__).resolve().parent.parent
 PROJECTS_DIR = Path(os.environ.get("CLIPSTUDIO_PROJECTS") or APP_DIR / "projects")
 MODELS_DIR = Path(os.environ.get("CLIPSTUDIO_MODELS") or APP_DIR / "models")
 FONTS_DIR = APP_DIR / "fonts"
+ASSETS_DIR = Path(os.environ.get("CLIPSTUDIO_ASSETS") or APP_DIR / "assets")     # emoji pictures, downloaded once
 
 # The finished clip: vertical 1080x1920 at 30 frames a second.
 OUT_W, OUT_H, OUT_FPS = 1080, 1920, 30

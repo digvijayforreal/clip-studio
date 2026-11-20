@@ -112,11 +112,19 @@ def download_section(url: str, start: float, end: float, dest: Path, cookies_bro
         outtmpl=str(dest.with_suffix("")) + ".%(ext)s",
         overwrites=True,
     )
-    try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            ydl.download([url])
-    except yt_dlp.utils.DownloadError as e:
-        raise DownloadError(explain(str(e), log.lines)) from None
+    for attempt in range(2):
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                ydl.download([url])
+            break
+        except yt_dlp.utils.DownloadError as e:
+            # ffmpeg reading YouTube's stream sometimes dies part way; a second try nearly always works
+            if attempt == 0 and "ffmpeg exited" in str(e):
+                log.lines.clear()
+                for old in dest.parent.glob(dest.stem + ".*"):
+                    old.unlink(missing_ok=True)
+                continue
+            raise DownloadError(explain(str(e), log.lines)) from None
     if not dest.is_file():
         others = sorted(p.name for p in dest.parent.glob(dest.stem + ".*"))
         raise DownloadError(f"The download finished but {dest.name} is missing (found: {', '.join(others) or 'nothing'}).")

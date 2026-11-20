@@ -4,7 +4,23 @@ import numpy as np
 import pytest
 
 from clipstudio import media
-from clipstudio.transcribe import SAMPLE_RATE, clean_words, read_wav
+from clipstudio.transcribe import SAMPLE_RATE, choose, clean_words, read_wav
+
+
+@pytest.mark.parametrize("odds, language", [
+    ({"en": 0.999, "hi": 0.000}, "en"),                  # measured: pure English
+    ({"en": 0.858, "hi": 0.103, "ur": 0.002}, "hi"),     # measured: Hinglish cabinet briefing
+    ({"en": 0.05, "hi": 0.60, "ur": 0.30}, "hi"),
+    ({"en": 0.90, "hi": 0.015, "ur": 0.02}, "hi"),       # Urdu odds count as Hindi
+    ({"en": 0.97, "hi": 0.01}, "en"),
+    ({"de": 0.9, "en": 0.05}, "en"),                     # only Hindi or English are ever chosen
+])
+def test_choose_language(odds, language):
+    assert choose(odds) == language
+
+
+def test_choose_respects_allowed():
+    assert choose({"en": 0.6, "hi": 0.4}, allowed=("en",)) == "en"
 
 
 def test_clean_words_tidies_whisper_output():

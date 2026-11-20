@@ -7,3 +7,8 @@ __pycache__/
 # Downloaded and generated files
 projects/
 models/
+uploads/
+assets/
+
+# Holds the AI key
+settings.json

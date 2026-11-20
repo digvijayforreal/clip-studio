@@ -13,6 +13,7 @@ from . import config, models
 
 _PUNCTUATION_ONLY = re.compile(r"^[^\w]+$")
 SAMPLE_RATE = 16000
+HINDI_SHARE = 0.03       # Hindi + Urdu odds at or above this: the speech is Hindi or Hinglish
 
 
 @lru_cache(maxsize=1)
@@ -25,17 +26,26 @@ def load_model(name: str = config.DEFAULT_MODEL):
     return WhisperModel(str(folder), device="cpu", compute_type="int8", cpu_threads=threads)
 
 
-def pick_language(model, audio, allowed=config.LANGUAGES) -> tuple[str, float]:
-    """Which of the allowed languages is being spoken, and how sure Whisper is.
+def choose(odds: dict, allowed=config.LANGUAGES) -> str:
+    """The language to write the captions in, from Whisper's odds.
 
-    Whisper is asked for its odds on every language, and the most likely allowed one wins. Hindi and Urdu sound
-    the same, so without this a Hindi video often comes out in Urdu script."""
+    Hinglish (Hindi with English words mixed in) usually scores as English, and Whisper then writes the Hindi
+    as broken Roman text. Pure English gets almost no Hindi odds (0.000 measured) while Hinglish still gets a
+    clear share (0.10 measured), so any real Hindi share means Hindi: Hindi words in Devanagari, English words
+    left in English. Urdu counts as Hindi, because Whisper can't tell the two apart by sound."""
+    if "hi" in allowed and odds.get("hi", 0.0) + odds.get("ur", 0.0) >= HINDI_SHARE:
+        return "hi"
+    return max(allowed, key=lambda code: odds.get(code, 0.0))
+
+
+def pick_language(model, audio, allowed=config.LANGUAGES) -> tuple[str, float]:
+    """Which of the allowed languages to use, and Whisper's odds for it."""
     try:
         _, _, ranked = model.detect_language(audio=audio, vad_filter=True, language_detection_segments=3)
     except ValueError:                   # no speech found at all (music, silence): nothing to choose from
         return allowed[0], 0.0
     odds = dict(ranked)
-    best = max(allowed, key=lambda code: odds.get(code, 0.0))
+    best = choose(odds, allowed)
     return best, float(odds.get(best, 0.0))
 
 
@@ -80,8 +90,11 @@ def read_wav(path) -> np.ndarray:
 
 
 def transcribe(audio_path: Path, language: str | None = None, model_name: str = config.DEFAULT_MODEL,
-               on_progress=None) -> dict:
-    """{"language": "hi" or "en", "words": [{"w", "s", "e", "p"}]} with times in seconds from the start of the file."""
+               on_progress=None, accurate: bool = False) -> dict:
+    """{"language": "hi" or "en", "words": [{"w", "s", "e", "p"}]} with times in seconds from the start of the file.
+
+    `accurate` searches 5 ways through each sentence instead of 1: about 2x slower on a CPU, and on the
+    tests so far only a word or two different."""
     model = load_model(model_name)
     audio = read_wav(audio_path)
     total = len(audio) / SAMPLE_RATE
@@ -92,7 +105,7 @@ def transcribe(audio_path: Path, language: str | None = None, model_name: str = 
     segments, _info = model.transcribe(
         audio, language=language, task="transcribe", word_timestamps=True,
         vad_filter=True, vad_parameters={"min_silence_duration_ms": 500},
-        beam_size=5, condition_on_previous_text=False,
+        beam_size=5 if accurate else 1, condition_on_previous_text=False,
     )
     raw = []
     for segment in segments:

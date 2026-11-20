@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ClipStudio</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ff2e88'/%3E%3Cpath d='M9 7h9a5 5 0 0 1 0 10h-5v8H9z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/editor/editor.css">
+</head>
+<body>
+  <a class="skip" href="#view">Skip to content</a>
+  <header class="top">
+    <div class="sunset" aria-hidden="true">
+      <svg viewBox="0 0 1200 160" preserveAspectRatio="xMidYMax slice">
+        <defs>
+          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#2a0845"/><stop offset=".55" stop-color="#8b1e6f"/><stop offset="1" stop-color="#ff7a3d"/>
+          </linearGradient>
+          <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffe066"/><stop offset="1" stop-color="#ff2e88"/>
+          </linearGradient>
+        </defs>
+        <rect width="1200" height="160" fill="url(#sky)"/>
+        <circle cx="900" cy="150" r="95" fill="url(#sun)"/>
+        <g fill="#2a0845" opacity=".55"><rect x="805" y="96" width="190" height="6"/><rect x="805" y="114" width="190" height="8"/><rect x="805" y="134" width="190" height="10"/></g>
+        <g fill="#14031f">
+          <path d="M0 160V128l40-6 30 10 50-14 60 12 70-8 90 10 80-16 90 14 100-10 120 12 90-8 100 10 120-12 70 8 90-6v34z"/>
+          <path d="M150 160c4-40 6-70 4-100l5-1c3 30 2 62-2 101z"/>
+          <path d="M156 62c-20-6-40 0-56 14 18-6 36-8 56-6zm2-2c10-18 28-26 50-26-18 6-34 14-46 30zm-2 4c-16 10-26 26-30 44 10-16 22-30 36-40zm4-2c20 0 36 10 46 26-14-10-30-16-48-20zm-4-4c-8-16-22-24-40-28 14 8 26 18 36 32z"/>
+          <path d="M1060 160c3-34 4-60 2-86l5-1c3 26 2 54-1 87z"/>
+          <path d="M1065 76c-18-5-35 0-48 12 15-5 31-7 48-5zm2-2c9-15 24-22 42-22-15 5-29 12-39 26zm-2 4c-14 8-22 22-26 37 9-14 19-25 31-34zm3-2c17 0 31 9 40 22-12-9-26-14-41-17z"/>
+        </g>
+      </svg>
+    </div>
+    <div class="top-inner">
+      <a class="brand" href="#/missions" aria-label="ClipStudio home">
+        <span class="brand-main">ClipStudio</span>
+        <span class="brand-sub">Vice Cut Edition</span>
+      </a>
+      <nav class="tabs" aria-label="Main">
+        <a href="#/missions" data-tab="missions">Missions</a>
+        <a href="#/new" data-tab="new">New Heist</a>
+        <a href="#/settings" data-tab="settings">Settings</a>
+      </nav>
+      <div class="hud" aria-label="Status">
+        <div class="hud-cash" title="Finished clips"><span class="sr-only">Finished clips: </span>$<span id="cash">00000000</span></div>
+        <div class="hud-stars" id="stars" title="Jobs running or waiting" aria-label="No jobs running"></div>
+        <div class="hud-clock" id="clock" aria-hidden="true">00:00</div>
+      </div>
+    </div>
+  </header>
+
+  <main id="view" tabindex="-1"></main>
+
+  <aside class="tray" id="tray" aria-live="polite" aria-label="Jobs"></aside>
+  <div class="banner" id="banner" role="status" aria-live="assertive" hidden></div>
+  <div class="toast" id="toast" role="alert" hidden></div>
+
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

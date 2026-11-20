@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Cut YouTube videos into 9:16 clips with word-synced Hindi and English captions."
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "fastapi==0.165.0",
     "faster-whisper==1.2.1",
+    "uvicorn==0.54.0",
     "yt-dlp[default]==2026.10.26",
 ]
 
@@ -23,5 +25,7 @@ testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
+    "httpx==0.28.1",
+    "playwright==1.65.2",
     "pytest==9.2.0",
 ]

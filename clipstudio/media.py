@@ -54,8 +54,40 @@ def probe(path) -> dict:
     if _rotation(video) in (90, 270):
         width, height = height, width
     duration = float((data.get("format") or {}).get("duration") or video.get("duration") or 0)
-    return {"width": width, "height": height, "duration": round(duration, 3),
+    return {"width": width, "height": height, "duration": round(duration, 3), "fps": _fps(video),
             "has_audio": any(s.get("codec_type") == "audio" for s in streams)}
+
+
+def _fps(stream: dict) -> float:
+    """Frames a second, from "30000/1001"-style rates. 30 when the file doesn't say."""
+    for key in ("avg_frame_rate", "r_frame_rate"):
+        num, _, den = str(stream.get(key) or "").partition("/")
+        try:
+            value = float(num) / float(den or 1)
+        except (ValueError, ZeroDivisionError):
+            continue
+        if 1 <= value <= 240:
+            return round(value, 3)
+    return 30.0
+
+
+def silences(path, start: float, end: float, min_length: float, noise_db: float = -35.0) -> list[tuple[float, float]]:
+    """Stretches of [start, end] in the file quieter than noise_db for at least min_length seconds,
+    in the file's own seconds. Music under the speech hides pauses, and then nothing is found."""
+    proc = run(["ffmpeg", "-hide_banner", "-nostats", "-ss", f"{start:.3f}", "-t", f"{end - start:.3f}",
+                "-i", str(path), "-vn", "-af", f"silencedetect=noise={noise_db}dB:d={min_length:.3f}",
+                "-f", "null", "-"])
+    found, opened = [], None
+    for line in proc.stderr.splitlines():
+        if "silence_start:" in line:
+            opened = float(line.split("silence_start:")[1].split()[0])
+        elif "silence_end:" in line and opened is not None:
+            closed = float(line.split("silence_end:")[1].split()[0])
+            found.append((round(start + max(0.0, opened), 3), round(start + closed, 3)))
+            opened = None
+    if opened is not None:                      # quiet right up to the end
+        found.append((round(start + max(0.0, opened), 3), round(end, 3)))
+    return found
 
 
 def extract_audio(src, dest, start: float | None = None, duration: float | None = None) -> Path:

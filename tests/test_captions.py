@@ -110,6 +110,56 @@ def test_build_ass_shrinks_one_long_word():
     assert captions.MIN_SIZE <= size < captions.STYLES["bold"]["size"]
 
 
+def test_pop_style_shows_one_word_at_a_time_each_popping():
+    lines = events(build_ass([w("one", 0.0, 0.3), w("two", 0.3, 0.6), w("three", 0.6, 0.9)], 0.0, 2.0, "pop"))
+    assert len(lines) == 3
+    assert all("\\t(0,110" in line for line in lines)
+    assert [re.sub(r"\{[^}]*\}", "", line.split(",", 9)[9]) for line in lines] == ["ONE", "TWO", "THREE"]
+
+
+def test_boxed_style_draws_a_box():
+    ass = build_ass([w("hi", 0.0, 0.3)], 0.0, 1.0, "boxed")
+    cap_style = next(line for line in ass.splitlines() if line.startswith("Style: Cap,"))
+    assert cap_style.split(",")[15] == "3"            # BorderStyle 3: an opaque box
+
+
+def test_hook_is_wrapped_and_stays_up():
+    ass = build_ass([], 0.0, 10.0, hook="THIS IS WHY NOBODY TELLS YOU THE TRUTH", hook_y=400)
+    hook = next(line for line in events(ass) if ",Hook," in line)
+    assert times(hook) == ("0:00:00.00", "0:00:10.00")
+    text = hook.split(",", 9)[9]
+    assert "\\pos(540,400)" in text and text.count("\\N") >= 1
+    assert all(units(part) <= captions.HOOK["max_units"] for part in re.sub(r"\{[^}]*\}", "", text).split("\\N"))
+
+
+def test_hook_can_leave_early():
+    hook = next(line for line in events(build_ass([], 0.0, 10.0, hook="WAIT", hook_seconds=3)) if ",Hook," in line)
+    assert times(hook)[1] == "0:00:03.00" and "\\fad(0,200)" in hook
+
+
+def test_progress_bar_fills_over_the_clip():
+    bar = next(line for line in events(build_ass([], 0.0, 12.5, progress=True)) if ",Bar," in line)
+    assert times(bar) == ("0:00:00.00", "0:00:12.50")
+    assert "\\fscx0\\t(0,12500,\\fscx100)" in bar and "\\p1" in bar
+
+
+def test_captions_move_and_grow():
+    lines = events(build_ass([w("hi", 0.0, 0.5)], 0.0, 1.0, "bold", y=500, x=300, scale=1.5))
+    assert "\\pos(300,500)" in lines[0] and "\\fs192" in lines[0]
+
+
+def test_free_texts():
+    texts = [{"text": "BIG\nNEWS {x}", "start": 1.0, "end": 9.0, "px": 540, "py": 400, "size": 120, "font": "Anton",
+              "color": "FF0000", "box": True, "back": "FFFFFF"},
+             {"text": "   ", "start": 0, "end": 2, "px": 1, "py": 1, "size": 90, "font": "Anton", "color": "FFFFFF",
+              "box": False, "back": "000000"}]
+    lines = [line for line in events(build_ass([], 0.0, 5.0, texts=texts)) if ",Text" in line]
+    assert len(lines) == 1                                         # the empty one is left out
+    assert times(lines[0]) == ("0:00:01.00", "0:00:05.00")          # stops at the end of the clip
+    assert ",TextBox," in lines[0] and "\\fnAnton\\fs120" in lines[0] and "\\c&H0000FF&" in lines[0]
+    assert lines[0].endswith("BIG\\NNEWS x")
+
+
 def test_build_ass_without_words_is_just_the_header():
     ass = build_ass([], 0.0, 5.0)
     assert "PlayResX: 1080" in ass and "PlayResY: 1920" in ass
